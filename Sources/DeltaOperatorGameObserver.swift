@@ -130,13 +130,16 @@ final class DeltaOperatorGameObserver {
             gameVC.game = nil
             UIApplication.shared.requestSceneSessionDestruction(windowScene.session, options: nil, errorHandler: nil)
         } else {
-            gameVC.returnToGameViewController()
-            gameVC.performSegue(withIdentifier: Self.showGamesSegueIdentifier, sender: nil)
-            DispatchQueue.main.async {
-                gameVC.game = nil
-                if let nav = gameVC.presentedViewController as? UINavigationController,
-                   let gamesVC = nav.topViewController as? GamesViewController {
-                    gamesVC.theme = .opaque
+            gameVC.emulatorCore?.stop()
+            gameVC.returnToGameViewController {
+                gameVC.performSegue(withIdentifier: Self.showGamesSegueIdentifier, sender: nil)
+                DispatchQueue.main.async {
+                    gameVC.game = nil
+                    if let nav = gameVC.presentedViewController as? UINavigationController,
+                       let gamesVC = nav.topViewController as? GamesViewController {
+                        gamesVC.activeEmulatorCore = nil
+                        gamesVC.theme = .opaque
+                    }
                 }
             }
         }

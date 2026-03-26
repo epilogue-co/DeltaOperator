@@ -140,10 +140,9 @@ final class OperatorCollectionCoordinator {
 
         if let signature {
             guard case .transferring = state else { return false }
-            return GameType(fileExtension: signature.romExtension)?.rawValue == gameCollectionIdentifier
         }
 
-        return [GameType.gbc.rawValue, GameType.gba.rawValue].contains(gameCollectionIdentifier)
+        return true
     }
 }
 
