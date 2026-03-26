@@ -130,6 +130,7 @@ final class DeltaOperatorGameObserver {
             gameVC.game = nil
             UIApplication.shared.requestSceneSessionDestruction(windowScene.session, options: nil, errorHandler: nil)
         } else {
+            gameVC.returnToGameViewController()
             gameVC.performSegue(withIdentifier: Self.showGamesSegueIdentifier, sender: nil)
             DispatchQueue.main.async {
                 gameVC.game = nil
