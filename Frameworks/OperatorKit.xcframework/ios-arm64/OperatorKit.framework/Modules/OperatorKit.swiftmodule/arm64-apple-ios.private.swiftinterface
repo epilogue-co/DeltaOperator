@@ -56,6 +56,7 @@ public protocol OperatorKitControllerDelegate : AnyObject, Swift.Sendable {
   public static let saveWritebackDidEndNotification: Foundation.Notification.Name
   public static let gameIdentifierKey: Swift.String
   public static let restoredSaveDataKey: Swift.String
+  public static let defaultGameName: Swift.String
   @Combine.Published @_projectedValueProperty($slotState) final public var slotState: OperatorKit.OperatorSlotState {
     get
   }
@@ -79,6 +80,7 @@ public protocol OperatorKitControllerDelegate : AnyObject, Swift.Sendable {
   final public func stop()
   final public func notifySaveDataChanged()
   final public func applyCartridgeSave() -> Swift.Bool
+  final public func invalidateCurrentROMCache()
   final public func cleanupStaleGame()
   final public func restoreOrphanedBorrowBackup()
   @objc deinit

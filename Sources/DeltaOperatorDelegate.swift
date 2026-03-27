@@ -40,11 +40,17 @@ final class DeltaOperatorDelegate: OperatorKitControllerDelegate, @unchecked Sen
     }
 
     /// Deletes the game and its ROM file from Delta's database.
+    /// Invalidates the ROM cache for possible bad dumps so the next insertion re-reads from the device.
     ///
     /// - Parameter gameIdentifier: The identifier of the game to delete.
     func operatorController(_ controller: OperatorKitController, deleteGameWith gameIdentifier: String) {
         let delete: (NSManagedObjectContext) -> Void = { context in
             guard let game = self.fetchGame(identifier: gameIdentifier, in: context) else { return }
+
+            if game.name == OperatorKitController.defaultGameName {
+                controller.invalidateCurrentROMCache()
+            }
+
             try? FileManager.default.removeItem(at: game.gameSaveURL)
             context.delete(game)
             try? context.save()
