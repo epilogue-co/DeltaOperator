@@ -48,7 +48,7 @@ final class DeltaOperatorGameObserver {
             .sink { [weak self] in self?.handleSlotStateChanged($0) }
 
         // Configure writeback toast.
-        writebackToast.shouldSuppress = { [weak self] in self?.isGBCCartridge() ?? false }
+        writebackToast.shouldSuppress = { [weak self] in self?.usesPeriodicSaveFlush() ?? false }
         writebackToast.activeViewController = { DeltaOperatorUtils.findActiveGameViewController() }
     }
 
@@ -85,7 +85,7 @@ final class DeltaOperatorGameObserver {
                 reloadCartridgeSave(for: id)
                 dismissGameScene(gameVC, windowScene: windowScene)
             }
-            if isGBCCartridge() { startSaveFlushTimer() }
+            if usesPeriodicSaveFlush() { startSaveFlushTimer() }
         } else {
             cartridgeSaveApplied = false
             stopSaveFlushTimer()
@@ -198,12 +198,16 @@ final class DeltaOperatorGameObserver {
 
     // MARK: - Helpers
 
-    /// Returns whether the current cartridge uses the GB platform.
+    /// Returns whether the current cartridge needs the periodic SRAM flush.
     ///
-    /// - Returns: True if the cartridge platform is GB/GBC.
-    private func isGBCCartridge() -> Bool {
+    /// GB and SNES cores don't write SRAM to disk during gameplay, so their saves
+    /// must be polled and flushed. The writeback toast is also suppressed for these
+    /// platforms because the frequent small flushes would otherwise spam it.
+    ///
+    /// - Returns: True if the cartridge platform is GB/GBC or SNES.
+    private func usesPeriodicSaveFlush() -> Bool {
         guard let sig = OperatorKitController.shared.publishedSignature else { return false }
-        return sig.platform == .gb
+        return sig.platform == .gb || sig.platform == .snes
     }
 
 }
