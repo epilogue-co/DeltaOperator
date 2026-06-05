@@ -19,6 +19,7 @@ final class DeltaOperatorGameObserver {
     private var cartridgeSaveApplied = false
 
     private let writebackToast = DeltaOperatorWritebackToast()
+    private let saveReadFailedToast = DeltaOperatorSaveReadFailedToast()
     private static let showGamesSegueIdentifier = "showGamesViewController"
 
     /// Periodically flushes SRAM to disk for cores that don't trigger save callbacks during gameplay.
@@ -32,9 +33,10 @@ final class DeltaOperatorGameObserver {
     init() {
         let nc = NotificationCenter.default
 
-        // Stop emulation synchronously when the cartridge is removed.
+        // Tear down on the main thread: dismissGameScene touches UIKit, and teardown must not run
+        // concurrently with EmulatorCore.start() or a cartridge pulled mid-launch deadlocks stop()/start().
         cartridgeObserver = nc.addObserver(
-            forName: OperatorKitController.cartridgeRemovedNotification, object: nil, queue: nil
+            forName: OperatorKitController.cartridgeRemovedNotification, object: nil, queue: .main
         ) { [weak self] in self?.handleCartridgeRemoved($0) }
 
         // Trigger save writeback to cartridge when Core Data persists a GameSave.
@@ -66,11 +68,21 @@ final class DeltaOperatorGameObserver {
     ///
     /// - Parameter notification: The Core Data did-save notification.
     private func handleDatabaseSave(_ notification: Notification) {
-        let contains: (String) -> Bool = { key in
-            (notification.userInfo?[key] as? Set<NSManagedObject>)?.contains(where: { $0 is GameSave }) == true
+        let changedSaves: (String) -> [GameSave] = { key in
+            (notification.userInfo?[key] as? Set<NSManagedObject>)?.compactMap { $0 as? GameSave } ?? []
         }
-        guard contains(NSUpdatedObjectsKey) || contains(NSInsertedObjectsKey) else { return }
-        if !cartridgeSaveApplied, case .imported(let id) = OperatorKitController.shared.slotState { reloadCartridgeSave(for: id) }
+        let saves = changedSaves(NSUpdatedObjectsKey) + changedSaves(NSInsertedObjectsKey)
+        guard !saves.isEmpty,
+              case .imported(let importedID) = OperatorKitController.shared.slotState else { return }
+
+        let viewContext = DatabaseManager.shared.viewContext
+        let matchesImported = saves.contains { save in
+            guard save.managedObjectContext == viewContext else { return true }
+            return save.game?.identifier == importedID
+        }
+        guard matchesImported else { return }
+
+        if !cartridgeSaveApplied { reloadCartridgeSave(for: importedID) }
         guard cartridgeSaveApplied else { return }
         OperatorKitController.shared.notifySaveDataChanged()
     }
@@ -80,10 +92,8 @@ final class DeltaOperatorGameObserver {
     /// - Parameter state: The new slot state from OperatorKit.
     private func handleSlotStateChanged(_ state: OperatorSlotState) {
         if case .imported(let id) = state {
-            if let (gameVC, windowScene) = DeltaOperatorUtils.findGameViewController(for: id),
-               gameVC.game is Game {
+            if let (gameVC, _) = DeltaOperatorUtils.findGameViewController(for: id), gameVC.game is Game {
                 reloadCartridgeSave(for: id)
-                dismissGameScene(gameVC, windowScene: windowScene)
             }
             if usesPeriodicSaveFlush() { startSaveFlushTimer() }
         } else {
@@ -151,15 +161,18 @@ final class DeltaOperatorGameObserver {
     ///
     /// - Parameter gameIdentifier: The identifier of the imported game.
     private func reloadCartridgeSave(for gameIdentifier: String) {
-        guard let gameVC = DeltaOperatorUtils.findActiveGameViewController(),
-              let game = gameVC.game as? Game, game.identifier == gameIdentifier,
+        guard let (gameVC, _) = DeltaOperatorUtils.findGameViewController(for: gameIdentifier),
+              let game = gameVC.game as? Game,
               let core = gameVC.emulatorCore, core.state == .running || core.state == .paused
         else { return }
 
+        let shouldApply = OperatorKitController.shared.cartridgeSaveMatchesDisk()
         let wasRunning = core.state == .running
         if wasRunning { core.pause() }
-        cartridgeSaveApplied = OperatorKitController.shared.applyCartridgeSave()
-        core.deltaCore.emulatorBridge.loadGameSave(from: game.gameSaveURL)
+        if shouldApply, OperatorKitController.shared.applyCartridgeSave() {
+            core.deltaCore.emulatorBridge.loadGameSave(from: game.gameSaveURL)
+        }
+        cartridgeSaveApplied = true
         if wasRunning { core.resume() }
     }
 
@@ -182,8 +195,8 @@ final class DeltaOperatorGameObserver {
 
     /// Flushes SRAM to disk via the emulator bridge and triggers a writeback if the data changed.
     private func flushSaveIfChanged() {
-        guard OperatorKitController.shared.importedGameIdentifier != nil,
-              let gameVC = DeltaOperatorUtils.findActiveGameViewController(),
+        guard let id = OperatorKitController.shared.importedGameIdentifier,
+              let (gameVC, _) = DeltaOperatorUtils.findGameViewController(for: id),
               let core = gameVC.emulatorCore, core.state == .running
         else { return }
 

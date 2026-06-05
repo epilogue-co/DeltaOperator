@@ -1,7 +1,7 @@
 // swift-interface-format-version: 1.0
-// swift-compiler-version: Apple Swift version 6.3.2 effective-5.10 (swiftlang-6.3.2.1.108 clang-2100.1.1.101)
-// swift-module-flags: -target x86_64-apple-ios16.0-simulator -enable-objc-interop -enable-library-evolution -swift-version 5 -Osize -enable-experimental-feature DebugDescriptionMacro -module-name OperatorKit -package-name operatorkit
-// swift-module-flags-ignorable:  -formal-cxx-interoperability-mode=off -interface-compiler-version 6.3.2
+// swift-compiler-version: Apple Swift version 6.2.3 effective-5.10 (swiftlang-6.2.3.3.21 clang-1700.6.3.2)
+// swift-module-flags: -target x86_64-apple-ios16.0-simulator -enable-objc-interop -enable-library-evolution -swift-version 5 -enforce-exclusivity=checked -Osize -enable-experimental-feature DebugDescriptionMacro -module-name OperatorKit -package-name operatorkit
+// swift-module-flags-ignorable:  -formal-cxx-interoperability-mode=off -interface-compiler-version 6.2.3
 import Combine
 import CryptoKit
 import Foundation
@@ -13,27 +13,62 @@ import _StringProcessing
 import _SwiftConcurrencyShims
 import os.log
 import os
-@_hasMissingDesignatedInitializers public actor OperatorKitClient {
+@_hasMissingDesignatedInitializers public actor OperatorKitClient : OperatorKit.OperatorKitClientProtocol {
   public static let shared: OperatorKit.OperatorKitClient
+  #if compiler(>=5.3) && $NonescapableTypes
   public func setCallbacks(onState: @escaping @Sendable (OperatorKit.OperatorDeviceState) -> Swift.Void, onSignature: @escaping @Sendable (OperatorKit.CartridgeSignature?) -> Swift.Void)
+  #endif
   public func start()
   public func stop()
   public func requestAbort()
+  #if compiler(>=5.3) && $NonescapableTypes
   public func readSignature() async -> OperatorKit.CartridgeSignature?
+  #endif
+  #if compiler(>=5.3) && $NonescapableTypes
   public func readGame(size: Swift.UInt32, progress: (@Sendable (Swift.Double) -> Swift.Void)? = nil) async throws -> Foundation.Data
+  #endif
+  #if compiler(>=5.3) && $NonescapableTypes
   public func readSave(size: Swift.UInt32, saveChip: Swift.UInt8, romSize: Swift.UInt32, progress: (@Sendable (Swift.Double) -> Swift.Void)? = nil) async throws -> Foundation.Data
+  #endif
+  #if compiler(>=5.3) && $NonescapableTypes
   public func writeSave(_ data: Foundation.Data, saveChip: Swift.UInt8, romSize: Swift.UInt32, progress: (@Sendable (Swift.Double) -> Swift.Void)? = nil) async throws
+  #endif
   @objc deinit
   @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
   @_semantics("defaultActor") nonisolated final public var unownedExecutor: _Concurrency.UnownedSerialExecutor {
     get
   }
 }
+public protocol OperatorKitClientProtocol : Swift.Sendable {
+  #if compiler(>=5.3) && $NonescapableTypes
+  func setCallbacks(onState: @escaping @Sendable (OperatorKit.OperatorDeviceState) -> Swift.Void, onSignature: @escaping @Sendable (OperatorKit.CartridgeSignature?) -> Swift.Void) async
+  #endif
+  func start() async
+  func stop() async
+  func requestAbort() async
+  #if compiler(>=5.3) && $NonescapableTypes
+  func readGame(size: Swift.UInt32, progress: (@Sendable (Swift.Double) -> Swift.Void)?) async throws -> Foundation.Data
+  #endif
+  #if compiler(>=5.3) && $NonescapableTypes
+  func readSave(size: Swift.UInt32, saveChip: Swift.UInt8, romSize: Swift.UInt32, progress: (@Sendable (Swift.Double) -> Swift.Void)?) async throws -> Foundation.Data
+  #endif
+  #if compiler(>=5.3) && $NonescapableTypes
+  func writeSave(_ data: Foundation.Data, saveChip: Swift.UInt8, romSize: Swift.UInt32, progress: (@Sendable (Swift.Double) -> Swift.Void)?) async throws
+  #endif
+}
+extension OperatorKit.OperatorKitClientProtocol {
+  public func readGame(size: Swift.UInt32) async throws -> Foundation.Data
+  public func readSave(size: Swift.UInt32, saveChip: Swift.UInt8, romSize: Swift.UInt32) async throws -> Foundation.Data
+  public func writeSave(_ data: Foundation.Data, saveChip: Swift.UInt8, romSize: Swift.UInt32) async throws
+}
 public protocol OperatorKitControllerDelegate : AnyObject, Swift.Sendable {
   func operatorController(_ controller: OperatorKit.OperatorKitController, importROMAt url: Foundation.URL) async throws -> Swift.String
+  #if compiler(>=5.3) && $NonescapableTypes
   func operatorController(_ controller: OperatorKit.OperatorKitController, gameSaveURLFor gameIdentifier: Swift.String) async -> Foundation.URL?
+  #endif
   func operatorController(_ controller: OperatorKit.OperatorKitController, deleteGameWith gameIdentifier: Swift.String)
   func operatorController(_ controller: OperatorKit.OperatorKitController, hasGameWithIdentifier gameIdentifier: Swift.String) async -> Swift.Bool
+  func operatorController(_ controller: OperatorKit.OperatorKitController, isIdentifiedGameWith gameIdentifier: Swift.String) async -> Swift.Bool
   @_Concurrency.MainActor func operatorController(_ controller: OperatorKit.OperatorKitController, flushSaveFor gameIdentifier: Swift.String)
 }
 @_hasMissingDesignatedInitializers final public class OperatorKitController {
@@ -42,21 +77,26 @@ public protocol OperatorKitControllerDelegate : AnyObject, Swift.Sendable {
   public static let cartridgeRemovedNotification: Foundation.Notification.Name
   public static let saveWritebackDidStartNotification: Foundation.Notification.Name
   public static let saveWritebackDidEndNotification: Foundation.Notification.Name
+  public static let saveReadFailedNotification: Foundation.Notification.Name
   public static let gameIdentifierKey: Swift.String
   public static let restoredSaveDataKey: Swift.String
   public static let defaultGameName: Swift.String
-  @Combine.Published<OperatorKit.OperatorSlotState> @_projectedValueProperty($slotState) final public var slotState: OperatorKit.OperatorSlotState {
+  @Combine.Published @_projectedValueProperty($slotState) final public var slotState: OperatorKit.OperatorSlotState {
     get
   }
   final public var $slotState: Combine.Published<OperatorKit.OperatorSlotState>.Publisher {
     get
   }
-  @Combine.Published<OperatorKit.CartridgeSignature?> @_projectedValueProperty($publishedSignature) final public var publishedSignature: OperatorKit.CartridgeSignature? {
+  #if compiler(>=5.3) && $NonescapableTypes
+  @Combine.Published @_projectedValueProperty($publishedSignature) final public var publishedSignature: OperatorKit.CartridgeSignature? {
     get
   }
+  #endif
+  #if compiler(>=5.3) && $NonescapableTypes
   final public var $publishedSignature: Combine.Published<OperatorKit.CartridgeSignature?>.Publisher {
     get
   }
+  #endif
   final public var importedGameIdentifier: Swift.String? {
     get
   }
@@ -64,6 +104,7 @@ public protocol OperatorKitControllerDelegate : AnyObject, Swift.Sendable {
   final public func stop()
   final public func notifySaveDataChanged()
   final public func applyCartridgeSave() -> Swift.Bool
+  final public func cartridgeSaveMatchesDisk() -> Swift.Bool
   final public func invalidateCurrentROMCache()
   final public func cleanupStaleGame()
   final public func restoreOrphanedBorrowBackup()
@@ -107,7 +148,9 @@ public struct CartridgeSignature : Swift.Equatable, Swift.Sendable {
     case gba
     case snes
     case unknown
+    #if compiler(>=5.3) && $NonescapableTypes
     public init?(rawValue: Swift.UInt8)
+    #endif
     public typealias RawValue = Swift.UInt8
     public var rawValue: Swift.UInt8 {
       get
@@ -118,7 +161,9 @@ public struct CartridgeSignature : Swift.Equatable, Swift.Sendable {
     case eeprom
     case sram
     case flash
+    #if compiler(>=5.3) && $NonescapableTypes
     public init?(rawValue: Swift.UInt8)
+    #endif
     public typealias RawValue = Swift.UInt8
     public var rawValue: Swift.UInt8 {
       get
