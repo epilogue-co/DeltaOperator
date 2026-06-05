@@ -2,82 +2,56 @@
 //  DeltaOperatorWritebackToast.swift
 //  DeltaOperator
 //
-//  Displays a toast during save writeback to warn the user not to remove the cartridge.
+//  Shows the "Saving to cartridge" toast during save writeback.
 //
 
 import OperatorKit
-import Roxas
 import UIKit
 
-/// Manages the "Saving to cartridge" toast shown during save writeback.
+/// Shows the "Saving to cartridge" toast during writeback, ref-counted across overlapping writebacks.
 final class DeltaOperatorWritebackToast {
-    private static let minimumDuration: TimeInterval = 2.0
     private static let toastText = NSLocalizedString("Saving to cartridge", comment: "")
     private static let toastDetailText = NSLocalizedString("Do not remove the cartridge or disconnect the device.", comment: "")
+    private static let lingerAfterEnd: TimeInterval = 2.0
 
-    private weak var toastView: RSTToastView?
-    private var dismissWorkItem: DispatchWorkItem?
+    private let toast = DeltaOperatorToast()
     private var startObserver: NSObjectProtocol?
     private var endObserver: NSObjectProtocol?
+    private var activeWritebacks = 0
 
-    /// The toast checks this before showing — return true to skip (e.g. for tiny saves).
+    /// Return true to skip the toast (e.g. the frequent tiny GB/SNES flushes).
     var shouldSuppress: (() -> Bool)?
 
-    /// The toast uses this to find the view to present in.
+    /// Supplies the view controller whose view the toast is presented in.
     var activeViewController: (() -> UIViewController?)?
 
-    // MARK: - Lifecycle
-
-    /// Subscribes to writeback start/end notifications.
     init() {
         let nc = NotificationCenter.default
-
         startObserver = nc.addObserver(
             forName: OperatorKitController.saveWritebackDidStartNotification, object: nil, queue: .main
-        ) { [weak self] _ in self?.show() }
-
+        ) { [weak self] _ in self?.handleStart() }
         endObserver = nc.addObserver(
             forName: OperatorKitController.saveWritebackDidEndNotification, object: nil, queue: .main
-        ) { [weak self] _ in self?.scheduleDismiss() }
+        ) { [weak self] _ in self?.handleEnd() }
     }
 
-    /// Removes notification observers.
     deinit {
         [startObserver, endObserver]
             .compactMap { $0 }
             .forEach { NotificationCenter.default.removeObserver($0) }
     }
 
-    // MARK: - Private API
-
-    /// Shows the toast in the active game view controller.
-    private func show() {
+    private func handleStart() {
         guard shouldSuppress?() != true else { return }
-
-        dismissWorkItem?.cancel()
-        dismissWorkItem = nil
-
-        guard toastView == nil,
-              let viewController = activeViewController?()
-        else { return }
-
-        let toast = RSTToastView(text: Self.toastText, detailText: Self.toastDetailText)
-        toast.textLabel.textAlignment = .center
-        toast.presentationEdge = .top
-        toast.show(in: viewController.view)
-        toastView = toast
+        activeWritebacks += 1
+        guard activeWritebacks == 1, let viewController = activeViewController?() else { return }
+        toast.show(text: Self.toastText, detail: Self.toastDetailText, in: viewController.view, dismissal: .manual)
     }
 
-    /// Dismisses the toast after a minimum display duration.
-    private func scheduleDismiss() {
+    private func handleEnd() {
         guard shouldSuppress?() != true else { return }
-
-        let workItem = DispatchWorkItem { [weak self] in
-            self?.toastView?.dismiss()
-            self?.toastView = nil
-            self?.dismissWorkItem = nil
-        }
-        dismissWorkItem = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + Self.minimumDuration, execute: workItem)
+        activeWritebacks = max(0, activeWritebacks - 1)
+        guard activeWritebacks == 0 else { return }
+        toast.dismiss(after: Self.lingerAfterEnd)
     }
 }

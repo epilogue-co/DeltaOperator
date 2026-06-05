@@ -71,12 +71,24 @@ final class DeltaOperatorDelegate: OperatorKitControllerDelegate, @unchecked Sen
         }
     }
 
+    /// Returns whether the game was identified by the games database (openVGDB), as opposed to
+    /// the unnamed Operator fallback used for unrecognized dumps.
+    ///
+    /// - Parameter gameIdentifier: The identifier to look up.
+    /// - Returns: `true` if the game's name is not the default Operator fallback name.
+    func operatorController(_ controller: OperatorKitController, isIdentifiedGameWith gameIdentifier: String) async -> Bool {
+        await MainActor.run {
+            guard let game = fetchGame(identifier: gameIdentifier, in: DatabaseManager.shared.viewContext) else { return false }
+            return game.name != OperatorKitController.defaultGameName
+        }
+    }
+
     /// Flushes in-memory SRAM to the game's save file on disk.
     ///
     /// - Parameter gameIdentifier: The identifier of the game whose SRAM to flush.
     @MainActor func operatorController(_ controller: OperatorKitController, flushSaveFor gameIdentifier: String) {
-        guard let gameVC = DeltaOperatorUtils.findActiveGameViewController(),
-              let game = gameVC.game as? Game, game.identifier == gameIdentifier,
+        guard let (gameVC, _) = DeltaOperatorUtils.findGameViewController(for: gameIdentifier),
+              let game = gameVC.game as? Game,
               let core = gameVC.emulatorCore, core.state == .running || core.state == .paused
         else { return }
         core.deltaCore.emulatorBridge.saveGameSave(to: game.gameSaveURL)
