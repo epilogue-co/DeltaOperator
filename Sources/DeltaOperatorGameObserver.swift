@@ -20,6 +20,7 @@ final class DeltaOperatorGameObserver {
 
     private let writebackToast = DeltaOperatorWritebackToast()
     private let saveReadFailedToast = DeltaOperatorSaveReadFailedToast()
+    private let importToast = DeltaOperatorImportToast()
     private static let showGamesSegueIdentifier = "showGamesViewController"
 
     /// Periodically flushes SRAM to disk for cores that don't trigger save callbacks during gameplay.
