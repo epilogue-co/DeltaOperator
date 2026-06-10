@@ -10,8 +10,8 @@ import UIKit
 
 /// Shows the "Saving to cartridge" toast during writeback, ref-counted across overlapping writebacks.
 final class DeltaOperatorWritebackToast {
-    private static let toastText = NSLocalizedString("Saving to cartridge", comment: "")
-    private static let toastDetailText = NSLocalizedString("Do not remove the cartridge or disconnect the device.", comment: "")
+    private static let toastText = NSLocalizedString("Saving to Cartridge", comment: "")
+    private static let toastDetailText = NSLocalizedString("Do not remove the cartridge.", comment: "")
     private static let lingerAfterEnd: TimeInterval = 2.0
 
     private let toast = DeltaOperatorToast()
