@@ -6,8 +6,6 @@
 //
 
 import Combine
-import CoreData
-import DeltaCore
 import OperatorKit
 import UIKit
 
@@ -147,7 +145,6 @@ final class OperatorCollectionCoordinator {
 
 /// Manages the Operator slot overlay on the "No Games" placeholder.
 final class OperatorOverlayCoordinator {
-    private static let gameCollectionVCIdentifier = "gameCollectionViewController"
     private static let regularItemWidth: CGFloat = 150
     private static let regularSpacing: CGFloat = 25
     private static let compactItemWidth: CGFloat = 90
@@ -158,7 +155,6 @@ final class OperatorOverlayCoordinator {
     private var leadingConstraint: NSLayoutConstraint?
     private weak var parentView: UIView?
     private weak var placeholderStackView: UIStackView?
-    private var lastFocusedPlatform: String?
 
     /// Whether the "No Games" placeholder is currently visible.
     var isPlaceholderVisible = false {
@@ -198,15 +194,11 @@ final class OperatorOverlayCoordinator {
         self.leadingConstraint = leading
     }
 
-    /// Subscribes to slot state and signature changes on the main queue.
+    /// Subscribes to slot state changes on the main queue.
     private func subscribeToSlotState() {
         OperatorKitController.shared.$slotState
-            .combineLatest(OperatorKitController.shared.$publishedSignature)
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] (slotState, signature) in
-                self?.updateVisibility()
-                self?.handlePlatformFocus(slotState: slotState, signature: signature)
-            }
+            .sink { [weak self] _ in self?.updateVisibility() }
             .store(in: &cancellables)
     }
 
@@ -219,26 +211,6 @@ final class OperatorOverlayCoordinator {
     }
 
     // MARK: - Event Handlers
-
-    /// Switches to the matching game collection tab when a cartridge is imported.
-    ///
-    /// - Parameters:
-    ///   - slotState: The current slot state.
-    ///   - signature: The current cartridge signature, if available.
-    private func handlePlatformFocus(slotState: OperatorSlotState, signature: CartridgeSignature?) {
-        guard case .imported = slotState,
-              let signature, !signature.isEmpty,
-              let platformRaw = GameType(fileExtension: signature.romExtension)?.rawValue
-        else {
-            if case .disconnected = slotState { self.lastFocusedPlatform = nil }
-            if case .connected = slotState { self.lastFocusedPlatform = nil }
-            return
-        }
-
-        guard platformRaw != self.lastFocusedPlatform else { return }
-        self.lastFocusedPlatform = platformRaw
-        self.switchToTab(identifier: platformRaw)
-    }
 
     /// Shows or hides the overlay and placeholder based on the current slot state.
     private func updateVisibility() {
@@ -310,75 +282,4 @@ final class OperatorOverlayCoordinator {
         }
     }
 
-    // MARK: - Tab Navigation
-
-    /// Navigates the page view controller to the game collection matching the given identifier.
-    ///
-    /// - Parameter identifier: The raw game type identifier of the target tab.
-    private func switchToTab(identifier: String) {
-        guard let gamesVC = self.findGamesViewController() else { return }
-        guard let pageVC = gamesVC.children.first(where: { $0 is UIPageViewController }) as? UIPageViewController else { return }
-        let pageControl = gamesVC.navigationController?.toolbar.subviews.compactMap({ $0 as? UIPageControl }).first
-
-        guard let (collections, targetIndex) = self.findTargetCollection(identifier: identifier) else { return }
-
-        let currentIndex = pageControl?.currentPage ?? 0
-        guard targetIndex != currentIndex else { return }
-
-        self.navigateToTab(gamesVC: gamesVC, pageVC: pageVC, pageControl: pageControl,
-                           collections: collections, targetIndex: targetIndex, currentIndex: currentIndex)
-    }
-
-    /// Walks the responder chain from the parent view to find the GamesViewController.
-    ///
-    /// - Returns: The GamesViewController, or nil if not found in the responder chain.
-    private func findGamesViewController() -> GamesViewController? {
-        var responder: UIResponder? = self.parentView
-        while let next = responder?.next {
-            if let vc = next as? GamesViewController { return vc }
-            responder = next
-        }
-        return nil
-    }
-
-    /// Fetches sorted game collections and finds the index matching the given identifier.
-    ///
-    /// - Parameter identifier: The raw game type identifier to find.
-    /// - Returns: The collections and target index, or nil if not found.
-    private func findTargetCollection(identifier: String) -> ([GameCollection], Int)? {
-        let fetchRequest = GameCollection.fetchRequest() as NSFetchRequest<GameCollection>
-        fetchRequest.sortDescriptors = [NSSortDescriptor(key: #keyPath(GameCollection.index), ascending: true)]
-        guard let collections = try? DatabaseManager.shared.viewContext.fetch(fetchRequest),
-              let targetIndex = collections.firstIndex(where: { $0.identifier == identifier })
-        else { return nil }
-        return (collections, targetIndex)
-    }
-
-    /// Performs the page navigation and updates the page control and title.
-    ///
-    /// - Parameters:
-    ///   - gamesVC: The GamesViewController hosting the pages.
-    ///   - pageVC: The page view controller to navigate.
-    ///   - pageControl: The page control to update, if present.
-    ///   - collections: The sorted game collections.
-    ///   - targetIndex: The index to navigate to.
-    ///   - currentIndex: The current page index.
-    private func navigateToTab(gamesVC: GamesViewController, pageVC: UIPageViewController,
-                               pageControl: UIPageControl?, collections: [GameCollection],
-                               targetIndex: Int, currentIndex: Int) {
-        let targetVC = gamesVC.storyboard?
-            .instantiateViewController(withIdentifier: Self.gameCollectionVCIdentifier)
-            as! GameCollectionViewController
-        targetVC.gameCollection = collections[targetIndex]
-        if let currentVC = pageVC.viewControllers?.first as? GameCollectionViewController {
-            targetVC.theme = currentVC.theme
-            targetVC.activeEmulatorCore = currentVC.activeEmulatorCore
-        }
-
-        let direction: UIPageViewController.NavigationDirection = targetIndex > currentIndex ? .forward : .reverse
-        pageVC.setViewControllers([targetVC], direction: direction, animated: true, completion: nil)
-        pageControl?.currentPage = targetIndex
-        gamesVC.title = targetVC.title
-        Settings.previousGameCollection = collections[targetIndex]
-    }
 }
