@@ -12,10 +12,10 @@ import UIKit
 /// match the games database, so OperatorKit re-reads it; this surfaces that retry and, if every attempt
 /// still fails to identify the game, the fallback to importing it unrecognized.
 final class DeltaOperatorImportToast {
-    private static let retryText = NSLocalizedString("Couldn't read the cartridge", comment: "")
+    private static let retryText = NSLocalizedString("Couldn't Read Cartridge", comment: "")
     private static let retryDetailText = NSLocalizedString("Trying again…", comment: "")
-    private static let unidentifiedText = NSLocalizedString("Couldn't identify this game", comment: "")
-    private static let unidentifiedDetailText = NSLocalizedString("Importing it as an unrecognized game. Clean the cartridge pins and reinsert to try again.", comment: "")
+    private static let unidentifiedText = NSLocalizedString("Couldn't Identify Game", comment: "")
+    private static let unidentifiedDetailText = NSLocalizedString("Clean the cartridge pins and reinsert to try again.", comment: "")
     private static let presentDelay: TimeInterval = 0.7
     private static let onScreen: TimeInterval = 4.0
 

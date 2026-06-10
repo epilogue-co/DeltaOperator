@@ -11,8 +11,8 @@ import UIKit
 /// Shows a warning toast when OperatorKit reports the cartridge save couldn't be read after retries.
 /// The game still launches saveless, so this just tells the user to clean the contacts and reinsert.
 final class DeltaOperatorSaveReadFailedToast {
-    private static let toastText = NSLocalizedString("Save data integrity check failed!", comment: "")
-    private static let toastDetailText = NSLocalizedString("The save data appears to be inconsistent between read cycles. Please clean the cartridge pins and try again.", comment: "")
+    private static let toastText = NSLocalizedString("Couldn't Read Save Data", comment: "")
+    private static let toastDetailText = NSLocalizedString("Clean the cartridge pins and try again.", comment: "")
     private static let presentDelay: TimeInterval = 0.7
     private static let onScreen: TimeInterval = 4.0
 
