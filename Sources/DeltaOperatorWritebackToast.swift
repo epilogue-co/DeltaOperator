@@ -19,9 +19,6 @@ final class DeltaOperatorWritebackToast {
     private var endObserver: NSObjectProtocol?
     private var activeWritebacks = 0
 
-    /// Return true to skip the toast (e.g. the frequent tiny GB/SNES flushes).
-    var shouldSuppress: (() -> Bool)?
-
     /// Supplies the view controller whose view the toast is presented in.
     var activeViewController: (() -> UIViewController?)?
 
@@ -42,14 +39,12 @@ final class DeltaOperatorWritebackToast {
     }
 
     private func handleStart() {
-        guard shouldSuppress?() != true else { return }
         activeWritebacks += 1
         guard activeWritebacks == 1, let viewController = activeViewController?() else { return }
         toast.show(text: Self.toastText, detail: Self.toastDetailText, in: viewController.view, dismissal: .manual)
     }
 
     private func handleEnd() {
-        guard shouldSuppress?() != true else { return }
         activeWritebacks = max(0, activeWritebacks - 1)
         guard activeWritebacks == 0 else { return }
         toast.dismiss(after: Self.lingerAfterEnd)

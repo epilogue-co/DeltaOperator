@@ -26,7 +26,8 @@ final class DeltaOperatorGameObserver {
     /// Periodically flushes SRAM to disk for cores that don't trigger save callbacks during gameplay.
     private var saveFlushTimer: Timer?
     private var lastFlushHash: String?
-    private static let saveFlushInterval: TimeInterval = 5.0
+    private var lastNotifiedHash: String?
+    private static let saveFlushInterval: TimeInterval = 1.0
 
     // MARK: - Lifecycle
 
@@ -51,7 +52,6 @@ final class DeltaOperatorGameObserver {
             .sink { [weak self] in self?.handleSlotStateChanged($0) }
 
         // Configure writeback toast.
-        writebackToast.shouldSuppress = { [weak self] in self?.usesPeriodicSaveFlush() ?? false }
         writebackToast.activeViewController = { DeltaOperatorUtils.findActiveGameViewController() }
     }
 
@@ -177,24 +177,26 @@ final class DeltaOperatorGameObserver {
         if wasRunning { core.resume() }
     }
 
-    /// Starts the periodic timer that flushes SRAM to disk every 5 seconds.
+    /// Starts the periodic timer that flushes SRAM to disk.
     private func startSaveFlushTimer() {
         guard saveFlushTimer == nil else { return }
         lastFlushHash = nil
+        lastNotifiedHash = nil
 
         saveFlushTimer = Timer.scheduledTimer(
             withTimeInterval: Self.saveFlushInterval, repeats: true
         ) { [weak self] _ in self?.flushSaveIfChanged() }
     }
 
-    /// Stops the periodic flush timer and resets the last known hash.
+    /// Stops the periodic flush timer and resets the last known hashes.
     private func stopSaveFlushTimer() {
         saveFlushTimer?.invalidate()
         saveFlushTimer = nil
         lastFlushHash = nil
+        lastNotifiedHash = nil
     }
 
-    /// Flushes SRAM to disk via the emulator bridge and triggers a writeback if the data changed.
+    /// Flushes SRAM to disk via the emulator bridge and triggers a writeback once the data settles.
     private func flushSaveIfChanged() {
         guard let id = OperatorKitController.shared.importedGameIdentifier,
               let (gameVC, _) = DeltaOperatorUtils.findGameViewController(for: id),
@@ -204,9 +206,12 @@ final class DeltaOperatorGameObserver {
         let saveURL = core.game.gameSaveURL
         core.deltaCore.emulatorBridge.saveGameSave(to: saveURL)
 
-        guard let hash = try? RSTHasher.sha1HashOfFile(at: saveURL),
-              hash != lastFlushHash else { return }
-        lastFlushHash = hash
+        // Notify only once the hash holds across two consecutive ticks, so a flush
+        // can't write back a save the game is still in the middle of writing.
+        guard let hash = try? RSTHasher.sha1HashOfFile(at: saveURL) else { return }
+        defer { lastFlushHash = hash }
+        guard hash == lastFlushHash, hash != lastNotifiedHash else { return }
+        lastNotifiedHash = hash
         OperatorKitController.shared.notifySaveDataChanged()
     }
 
@@ -214,14 +219,13 @@ final class DeltaOperatorGameObserver {
 
     /// Returns whether the current cartridge needs the periodic SRAM flush.
     ///
-    /// GB and SNES cores don't write SRAM to disk during gameplay, so their saves
-    /// must be polled and flushed. The writeback toast is also suppressed for these
-    /// platforms because the frequent small flushes would otherwise spam it.
+    /// The GB core doesn't write SRAM to disk during gameplay, so its saves must be
+    /// polled and flushed.
     ///
-    /// - Returns: True if the cartridge platform is GB/GBC or SNES.
+    /// - Returns: True if the cartridge platform is GB/GBC.
     private func usesPeriodicSaveFlush() -> Bool {
         guard let sig = OperatorKitController.shared.publishedSignature else { return false }
-        return sig.platform == .gb || sig.platform == .snes
+        return sig.platform == .gb
     }
 
 }
