@@ -93,8 +93,9 @@ final class DeltaOperatorGameObserver {
     /// - Parameter state: The new slot state from OperatorKit.
     private func handleSlotStateChanged(_ state: OperatorSlotState) {
         if case .imported(let id) = state {
-            if let (gameVC, _) = DeltaOperatorUtils.findGameViewController(for: id), gameVC.game is Game {
+            if let (gameVC, windowScene) = DeltaOperatorUtils.findGameViewController(for: id), gameVC.game is Game {
                 reloadCartridgeSave(for: id)
+                dismissGameScene(gameVC, windowScene: windowScene)
             }
             if usesPeriodicSaveFlush() { startSaveFlushTimer() }
         } else {
@@ -142,16 +143,32 @@ final class DeltaOperatorGameObserver {
             UIApplication.shared.requestSceneSessionDestruction(windowScene.session, options: nil, errorHandler: nil)
         } else {
             gameVC.emulatorCore?.stop()
-            gameVC.returnToGameViewController {
-                gameVC.performSegue(withIdentifier: Self.showGamesSegueIdentifier, sender: nil)
-                DispatchQueue.main.async {
-                    gameVC.game = nil
-                    if let nav = gameVC.presentedViewController as? UINavigationController,
-                       let gamesVC = nav.topViewController as? GamesViewController {
-                        gamesVC.activeEmulatorCore = nil
-                        gamesVC.theme = .opaque
+
+            if let nav = gameVC.presentedViewController as? UINavigationController,
+               let gamesVC = nav.topViewController as? GamesViewController {
+                gameVC.game = nil
+                gamesVC.activeEmulatorCore = nil
+                gamesVC.theme = .opaque
+                return
+            }
+
+            let finishDismissal = {
+                gameVC.returnToGameViewController {
+                    gameVC.performSegue(withIdentifier: Self.showGamesSegueIdentifier, sender: nil)
+                    DispatchQueue.main.async {
+                        gameVC.game = nil
+                        if let nav = gameVC.presentedViewController as? UINavigationController,
+                           let gamesVC = nav.topViewController as? GamesViewController {
+                            gamesVC.activeEmulatorCore = nil
+                            gamesVC.theme = .opaque
+                        }
                     }
                 }
+            }
+            if let pauseMenu = gameVC.presentedViewController as? PauseViewController {
+                pauseMenu.dismiss(animated: false, completion: finishDismissal)
+            } else {
+                finishDismissal()
             }
         }
     }
