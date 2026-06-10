@@ -99,6 +99,12 @@ public protocol OperatorKitControllerDelegate : AnyObject, Swift.Sendable {
     get
   }
   #endif
+  @Combine.Published @_projectedValueProperty($isImportInProgress) final public var isImportInProgress: Swift.Bool {
+    get
+  }
+  final public var $isImportInProgress: Combine.Published<Swift.Bool>.Publisher {
+    get
+  }
   final public var importedGameIdentifier: Swift.String? {
     get
   }
