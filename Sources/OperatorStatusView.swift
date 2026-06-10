@@ -23,6 +23,7 @@ public final class OperatorStatusView: UIView {
     private static let transferringIcon = UIImage(systemName: "arrow.down.circle")
     private static let insertCartridgeText = NSLocalizedString("Insert Cartridge", comment: "")
     private static let loadingFormat = NSLocalizedString("Loading… %d%%", comment: "")
+    private static let readingSaveText = NSLocalizedString("Reading Save…", comment: "")
     private var currentSlotState: OperatorSlotState = .connected
     private var lastBorderBounds: CGRect = .zero
     private var needsBorderRebuild = true
@@ -282,7 +283,11 @@ public final class OperatorStatusView: UIView {
     ///   - previousState: The state before this update.
     /// - Returns: `false` if only the stroke was animated (no layout rebuild needed).
     private func configureTransferring(_ progress: Double, from previousState: OperatorSlotState) -> Bool {
-        let percentText = String(format: Self.loadingFormat, Int(progress * 100))
+        // At 100% the ROM is transferred but the import is still finishing (identification,
+        // cartridge save read); say so instead of sitting on a full-looking percentage.
+        let percentText = progress >= 1.0
+            ? Self.readingSaveText
+            : String(format: Self.loadingFormat, Int(progress * 100))
 
         if case .transferring = previousState {
             if self.titleLabel.text != percentText { self.titleLabel.text = percentText }
