@@ -34,6 +34,17 @@ class OperatorSlotDataSource: RSTFetchedResultsCollectionViewPrefetchingDataSour
         return indexPath.item == frcCount
     }
 
+    /// Returns whether the game at the given index path is the in-flight cartridge import,
+    /// which is shown dimmed until it is ready to launch.
+    ///
+    /// - Parameter indexPath: The index path of the game cell.
+    private func isImportingGame(at indexPath: IndexPath) -> Bool {
+        let controller = OperatorKitController.shared
+        guard controller.importedGameIdentifier == item(at: indexPath).identifier else { return false }
+        if case .imported = controller.slotState { return false }
+        return true
+    }
+
     // MARK: - UICollectionViewDataSource
 
     /// Adds one extra item to section 0 when the operator slot is visible.
@@ -60,7 +71,10 @@ class OperatorSlotDataSource: RSTFetchedResultsCollectionViewPrefetchingDataSour
             operatorCellConfigurationHandler?(cell)
             return cell
         }
-        return super.collectionView(collectionView, cellForItemAt: indexPath)
+
+        let cell = super.collectionView(collectionView, cellForItemAt: indexPath)
+        cell.contentView.alpha = isImportingGame(at: indexPath) ? 0.4 : 1.0
+        return cell
     }
 
     // MARK: - Prefetching

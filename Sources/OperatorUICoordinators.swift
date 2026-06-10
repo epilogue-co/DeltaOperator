@@ -135,7 +135,6 @@ final class OperatorCollectionCoordinator {
     private func shouldShowOperatorSlot(for state: OperatorSlotState, signature: CartridgeSignature?) -> Bool {
         if case .disconnected = state { return false }
         if case .imported = state { return false }
-        if case .transferring(let progress) = state, progress >= 1.0 { return false }
         guard let gameCollectionIdentifier else { return false }
 
         if let signature {
