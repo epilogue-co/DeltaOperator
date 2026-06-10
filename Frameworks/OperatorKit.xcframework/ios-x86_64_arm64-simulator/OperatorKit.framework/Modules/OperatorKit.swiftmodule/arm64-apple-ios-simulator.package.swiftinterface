@@ -78,6 +78,8 @@ public protocol OperatorKitControllerDelegate : AnyObject, Swift.Sendable {
   public static let saveWritebackDidStartNotification: Foundation.Notification.Name
   public static let saveWritebackDidEndNotification: Foundation.Notification.Name
   public static let saveReadFailedNotification: Foundation.Notification.Name
+  public static let cartridgeReadRetryNotification: Foundation.Notification.Name
+  public static let gameUnidentifiedNotification: Foundation.Notification.Name
   public static let gameIdentifierKey: Swift.String
   public static let restoredSaveDataKey: Swift.String
   public static let defaultGameName: Swift.String
