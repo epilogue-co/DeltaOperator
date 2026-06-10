@@ -6,6 +6,7 @@
 //
 
 import Combine
+import DeltaCore
 import OperatorKit
 import UIKit
 
@@ -39,6 +40,7 @@ final class OperatorCollectionCoordinator {
                                 forCellWithReuseIdentifier: OperatorStatusCell.reuseIdentifier)
         self.wireCellConfiguration(dataSource: dataSource)
         self.subscribeToSlotState()
+        self.subscribeToImportWindow()
     }
 
     /// Sets the cell configuration handler on the data source.
@@ -63,6 +65,31 @@ final class OperatorCollectionCoordinator {
                 self?.handleStateChange(slotState, signature: signature)
             }
             .store(in: &cancellables)
+    }
+
+    /// Subscribes to the import window so in-flight game rows stay hidden until ready.
+    private func subscribeToImportWindow() {
+        OperatorKitController.shared.$isImportInProgress
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] in self?.setImportFilterArmed($0) }
+            .store(in: &cancellables)
+    }
+
+    /// Arms or clears the predicate that hides game rows inserted by the in-flight import.
+    ///
+    /// Snapshots the rows present when the import starts and excludes everything newer: the
+    /// imported game's identifier isn't known until after its row has merged into the grid.
+    ///
+    /// - Parameter armed: Whether a cartridge import is in progress.
+    private func setImportFilterArmed(_ armed: Bool) {
+        guard let dataSource else { return }
+        if armed {
+            guard let existing = dataSource.fetchedResultsController.fetchedObjects else { return }
+            dataSource.predicate = NSPredicate(format: "%K IN %@", #keyPath(Game.identifier), Set(existing.map { $0.identifier }))
+        } else if dataSource.predicate != nil {
+            dataSource.predicate = nil
+        }
     }
 
     // MARK: - Layout
