@@ -19,8 +19,8 @@ final class DeltaOperatorGameObserver {
     private var cartridgeSaveApplied = false
 
     private let writebackToast = DeltaOperatorWritebackToast()
-    private let saveReadFailedToast = DeltaOperatorSaveReadFailedToast()
     private let importToast = DeltaOperatorImportToast()
+    private let saveReadToast = DeltaOperatorSaveReadToast()
     private static let showGamesSegueIdentifier = "showGamesViewController"
 
     /// Periodically flushes SRAM to disk for cores that don't trigger save callbacks during gameplay.
@@ -51,8 +51,11 @@ final class DeltaOperatorGameObserver {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] in self?.handleSlotStateChanged($0) }
 
-        // Configure writeback toast.
-        writebackToast.activeViewController = { DeltaOperatorUtils.findActiveGameViewController() }
+        // Hold a background task around each cartridge write so suspension can't interrupt it.
+        OperatorKitController.shared.writebackBackgroundTaskProvider = {
+            let taskID = UIApplication.shared.beginBackgroundTask(withName: "OperatorSaveWriteback")
+            return { UIApplication.shared.endBackgroundTask(taskID) }
+        }
     }
 
     /// Removes notification observers and stops the flush timer.
@@ -184,10 +187,9 @@ final class DeltaOperatorGameObserver {
               let core = gameVC.emulatorCore, core.state == .running || core.state == .paused
         else { return }
 
-        let shouldApply = OperatorKitController.shared.cartridgeSaveMatchesDisk()
         let wasRunning = core.state == .running
         if wasRunning { core.pause() }
-        if shouldApply, OperatorKitController.shared.applyCartridgeSave() {
+        if OperatorKitController.shared.applySaveForLaunch() {
             core.deltaCore.emulatorBridge.loadGameSave(from: game.gameSaveURL)
         }
         cartridgeSaveApplied = true
