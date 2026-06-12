@@ -19,9 +19,6 @@ final class DeltaOperatorWritebackToast {
     private var endObserver: NSObjectProtocol?
     private var activeWritebacks = 0
 
-    /// Supplies the view controller whose view the toast is presented in.
-    var activeViewController: (() -> UIViewController?)?
-
     init() {
         let nc = NotificationCenter.default
         startObserver = nc.addObserver(
@@ -40,13 +37,29 @@ final class DeltaOperatorWritebackToast {
 
     private func handleStart() {
         activeWritebacks += 1
-        guard activeWritebacks == 1, let viewController = activeViewController?() else { return }
-        toast.show(text: Self.toastText, detail: Self.toastDetailText, in: viewController.view, dismissal: .manual)
+        guard activeWritebacks == 1, let view = Self.presentationView() else { return }
+        toast.show(text: Self.toastText, detail: Self.toastDetailText, in: view, dismissal: .manual)
     }
 
     private func handleEnd() {
         activeWritebacks = max(0, activeWritebacks - 1)
         guard activeWritebacks == 0 else { return }
         toast.dismiss(after: Self.lingerAfterEnd)
+    }
+
+    /// The top-most presented view controller's view in the foreground key window. Quitting to the
+    /// library keeps a GameViewController at the window root with the library presented over it, so
+    /// presenting there would bury the "do not remove" warning exactly when a post-quit writeback runs.
+    ///
+    /// - Returns: The view to present the toast in, or nil if no foreground key window was found.
+    private static func presentationView() -> UIView? {
+        let keyWindow = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .filter { $0.activationState == .foregroundActive }
+            .flatMap { $0.windows }
+            .first { $0.isKeyWindow }
+        var top = keyWindow?.rootViewController
+        while let presented = top?.presentedViewController { top = presented }
+        return top?.view
     }
 }

@@ -31,7 +31,7 @@ import os
   public func readSave(size: Swift.UInt32, saveChip: Swift.UInt8, romSize: Swift.UInt32, progress: (@Sendable (Swift.Double) -> Swift.Void)? = nil) async throws -> Foundation.Data
   #endif
   #if compiler(>=5.3) && $NonescapableTypes
-  public func writeSave(_ data: Foundation.Data, saveChip: Swift.UInt8, romSize: Swift.UInt32, progress: (@Sendable (Swift.Double) -> Swift.Void)? = nil) async throws
+  public func writeSave(_ data: Foundation.Data, saveChip: Swift.UInt8, romSize: Swift.UInt32, expectedLookupKey: Swift.String? = nil, progress: (@Sendable (Swift.Double) -> Swift.Void)? = nil) async throws
   #endif
   @objc deinit
   @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
@@ -47,19 +47,25 @@ public protocol OperatorKitClientProtocol : Swift.Sendable {
   func stop() async
   func requestAbort() async
   #if compiler(>=5.3) && $NonescapableTypes
+  func readSignature() async -> OperatorKit.CartridgeSignature?
+  #endif
+  #if compiler(>=5.3) && $NonescapableTypes
   func readGame(size: Swift.UInt32, progress: (@Sendable (Swift.Double) -> Swift.Void)?) async throws -> Foundation.Data
   #endif
   #if compiler(>=5.3) && $NonescapableTypes
   func readSave(size: Swift.UInt32, saveChip: Swift.UInt8, romSize: Swift.UInt32, progress: (@Sendable (Swift.Double) -> Swift.Void)?) async throws -> Foundation.Data
   #endif
   #if compiler(>=5.3) && $NonescapableTypes
-  func writeSave(_ data: Foundation.Data, saveChip: Swift.UInt8, romSize: Swift.UInt32, progress: (@Sendable (Swift.Double) -> Swift.Void)?) async throws
+  func writeSave(_ data: Foundation.Data, saveChip: Swift.UInt8, romSize: Swift.UInt32, expectedLookupKey: Swift.String?, progress: (@Sendable (Swift.Double) -> Swift.Void)?) async throws
   #endif
 }
 extension OperatorKit.OperatorKitClientProtocol {
   public func readGame(size: Swift.UInt32) async throws -> Foundation.Data
   public func readSave(size: Swift.UInt32, saveChip: Swift.UInt8, romSize: Swift.UInt32) async throws -> Foundation.Data
   public func writeSave(_ data: Foundation.Data, saveChip: Swift.UInt8, romSize: Swift.UInt32) async throws
+  #if compiler(>=5.3) && $NonescapableTypes
+  public func writeSave(_ data: Foundation.Data, saveChip: Swift.UInt8, romSize: Swift.UInt32, expectedLookupKey: Swift.String?) async throws
+  #endif
 }
 public protocol OperatorKitControllerDelegate : AnyObject, Swift.Sendable {
   func operatorController(_ controller: OperatorKit.OperatorKitController, importROMAt url: Foundation.URL) async throws -> Swift.String
@@ -77,6 +83,8 @@ public protocol OperatorKitControllerDelegate : AnyObject, Swift.Sendable {
   public static let cartridgeRemovedNotification: Foundation.Notification.Name
   public static let saveWritebackDidStartNotification: Foundation.Notification.Name
   public static let saveWritebackDidEndNotification: Foundation.Notification.Name
+  public static let saveReadDidStartNotification: Foundation.Notification.Name
+  public static let saveReadDidEndNotification: Foundation.Notification.Name
   public static let saveReadFailedNotification: Foundation.Notification.Name
   public static let cartridgeReadRetryNotification: Foundation.Notification.Name
   public static let gameUnidentifiedNotification: Foundation.Notification.Name
@@ -108,11 +116,19 @@ public protocol OperatorKitControllerDelegate : AnyObject, Swift.Sendable {
   final public var importedGameIdentifier: Swift.String? {
     get
   }
+  final public var saveReadDidFail: Swift.Bool {
+    get
+  }
+  final public var writebackBackgroundTaskProvider: (() -> () -> Swift.Void)?
   final public func start()
   final public func stop()
   final public func notifySaveDataChanged()
+  @discardableResult
   final public func applyCartridgeSave() -> Swift.Bool
+  @discardableResult
+  final public func applySaveForLaunch() -> Swift.Bool
   final public func cartridgeSaveMatchesDisk() -> Swift.Bool
+  final public func reattemptSaveRead() async -> Swift.Bool
   final public func invalidateCurrentROMCache()
   final public func cleanupStaleGame()
   final public func restoreOrphanedBorrowBackup()
@@ -142,6 +158,7 @@ public enum OperatorError : Swift.Error, Swift.Sendable {
   case readFailed
   case writeFailed
   case unstableConnection
+  case cartridgeMismatch
   public static func == (a: OperatorKit.OperatorError, b: OperatorKit.OperatorError) -> Swift.Bool
   public func hash(into hasher: inout Swift.Hasher)
   public var hashValue: Swift.Int {
