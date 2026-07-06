@@ -200,6 +200,7 @@ public struct CartridgeSignature : Swift.Equatable, Swift.Sendable {
   public let lookupKey: Swift.String
   public let deviceFingerprint: Swift.String
   public let firmwareSaveChip: Swift.UInt8
+  public var hasCartridge: Swift.Bool
   public var isEmpty: Swift.Bool {
     get
   }
